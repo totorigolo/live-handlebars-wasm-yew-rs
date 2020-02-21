@@ -1,0 +1,49 @@
+{
+    "inputs": [
+        {
+            "key": [
+                "date"
+            ],
+            "name": "Date",
+            "description": "A date, like 29/02/2029."
+        },
+        {
+            "key": [
+                "time"
+            ],
+            "name": "Time",
+            "description": "A time, like 13:37:00. The seconds are optionals."
+        },
+        {
+            "key": [
+                "author",
+                "first_name"
+            ],
+            "name": "First Name",
+            "description": "The author's first name"
+        },
+        {
+            "key": [
+                "author",
+                "last_name"
+            ],
+            "name": "Last Name",
+            "description": "The author's last name"
+        },
+        {
+            "key": [
+                "is_active"
+            ],
+            "name": "Is active?",
+            "description": "A boolean value."
+        },
+        {
+            "key": [
+                "license"
+            ],
+            "name": "The license",
+            "description": "Something for your lawer."
+        }
+    ],
+    "template": "%TEMPLATE%"
+}

@@ -5,5 +5,5 @@ mod app;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn main() {
-    yew::start_app::<app::App>();
+    yew::start_app::<app::Model>();
 }

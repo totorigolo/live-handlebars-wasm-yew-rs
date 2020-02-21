@@ -1,0 +1,24 @@
+Variables in the current context: {{date}}-{{time}}
+Dot-separated variables: {{author.first_name}} {{author.last_name}}
+Disable escaping: {{{unescaped}}}
+
+Array access: {{nodes.[2].[#name]}}
+
+{{#with story}}
+<div class='intro'>{{{intro}}}</div>
+<div class='body'>{{{body}}}</div>
+{{/with}}
+
+Iterate nodes:
+{{#each node}}
+- id={{id}} name={{name}}
+{{/each}}
+
+{{#if is_active}}
+Variable 'is_active' is set.
+{{else}}
+Variable 'is_active' is unset.
+{{/if}}{{#unless license}}
+
+No license set.
+{{/unless}}
