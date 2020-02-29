@@ -1,48 +1,92 @@
 {
     "inputs": [
         {
-            "key": [
-                "date"
-            ],
+            "key": "date",
             "name": "Date",
-            "description": "A date, like 29/02/2029."
+            "description": "A date, using the format DD/MM/YYYY.",
+            "type": "text",
+            "validate_regex": "\\d{1,2}/\\d{1,2}/\\d{4}"
         },
         {
-            "key": [
-                "time"
-            ],
+            "key": "time",
             "name": "Time",
-            "description": "A time, like 13:37:00. The seconds are optionals."
+            "description": "A time, like 13:37:00. The seconds are optionals.",
+            "type": "text",
+            "validate_regex": "\\d{1,2}:\\d{1,2}(:\\d{4})?"
         },
         {
-            "key": [
-                "author",
-                "first_name"
-            ],
-            "name": "First Name",
-            "description": "The author's first name"
+            "key": "author",
+            "name": "The Book author",
+            "description": "Details following",
+            "type": "group",
+            "inputs": [
+                {
+                    "key": "useless_info",
+                    "name": "Unseless info",
+                    "description": "For fun",
+                    "type": "group",
+                    "inputs": [
+                        {
+                            "key": "phi-foo",
+                            "name": "Phi-foo",
+                            "description": "Fifou",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "key": "first_name",
+                    "name": "First Name",
+                    "description": "The author's first name",
+                    "type": "text"
+                },
+                {
+                    "key": "last_name",
+                    "name": "Last Name",
+                    "description": "The author's last name",
+                    "type": "text"
+                },
+                {
+                    "key": "age",
+                    "name": "Age",
+                    "description": "The author's age",
+                    "type": "number",
+                    "min": 0,
+                    "step": 1
+                }
+            ]
         },
         {
-            "key": [
-                "author",
-                "last_name"
-            ],
-            "name": "Last Name",
-            "description": "The author's last name"
+            "key": "persons",
+            "name": "The list of persons",
+            "description": "Gimme names!",
+            "type": "list",
+            "inputs": [
+                {
+                    "key": "first_name",
+                    "name": "First Name",
+                    "description": "The author's first name",
+                    "type": "text"
+                },
+                {
+                    "key": "last_name",
+                    "name": "Last Name",
+                    "description": "The author's last name",
+                    "type": "text"
+                }
+            ]
         },
         {
-            "key": [
-                "is_active"
-            ],
+            "key": "is_active",
             "name": "Is active?",
-            "description": "A boolean value."
+            "description": "A boolean value.",
+            "type": "boolean"
         },
         {
-            "key": [
-                "license"
-            ],
+            "key": "license",
             "name": "The license",
-            "description": "Something for your lawer."
+            "description": "Something for your lawer.",
+            "type": "text"
         }
     ],
     "template": "%TEMPLATE%"

@@ -1,19 +1,21 @@
-#![allow(unused_imports)]
-
-use anyhow::{bail, Context, Result};
-use handlebars::Handlebars;
+use crate::{
+    prelude::*,
+    scenario::Scenario,
+    template_engine::{HandlebarsEngine, TemplateEngine},
+    InputsData, Path,
+};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use yew::{
-    events::InputData,
     format::Json as YewJson,
-    html,
-    html::Renderable,
-    services::storage::{Area, StorageService},
-    services::ConsoleService,
+    services::{
+        storage::{Area, StorageService},
+        ConsoleService,
+    },
     Component, ComponentLink, Html, ShouldRender,
 };
+
+use crate::inputs::*;
 
 lazy_static! {
     static ref LOCAL_STORAGE_KEY: String =
@@ -31,86 +33,15 @@ pub struct Model {
     state: State,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug)]
 enum State {
     Init,
     LoadFailed(String),
     Loaded {
-        template: String,
-        inputs: Vec<Input>,
+        scenario: Scenario,
         #[serde(default)]
         inputs_data: InputsData,
     },
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct Input {
-    key: Path,
-    name: String,
-    description: Option<String>,
-}
-
-type Path = std::rc::Rc<Vec<String>>;
-
-/// Represents the data entered in the inputs on the page.
-///
-/// Backed by a JSON object.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct InputsData(JsonValue);
-
-impl Default for InputsData {
-    fn default() -> Self {
-        Self(JsonValue::Object(Default::default()))
-    }
-}
-
-/// TODO
-///
-/// # Panic
-/// Must be called on a `JsonValue::Object` variant.
-fn insert_at_json<T>(json: &mut JsonValue, path: &[T], value: JsonValue)
-where
-    T: AsRef<str>,
-{
-    if let JsonValue::Object(obj) = json {
-        if let [tail] = path {
-            obj.insert(tail.as_ref().to_string(), value);
-        } else {
-            let nested_obj = obj
-                .entry(path[0].as_ref())
-                .or_insert(JsonValue::Object(Default::default()));
-            insert_at_json(nested_obj, &path[1..], value)
-        }
-    } else {
-        unreachable!("Compile-time logic error: json argument of insert_at_json must be an object.")
-    }
-}
-
-/// TODO
-///
-/// # Panic
-/// Must be called on a `JsonValue::Object` variant.
-fn get_at_json<'a, T: AsRef<str>>(json: &'a JsonValue, path: &[T]) -> Option<&'a JsonValue> {
-    if let JsonValue::Object(obj) = json {
-        if let [tail] = path {
-            obj.get(tail.as_ref())
-        } else {
-            obj.get(path[0].as_ref())
-                .and_then(|nested_obj| get_at_json(nested_obj, &path[1..]))
-        }
-    } else {
-        unreachable!("Compile-time logic error: json argument of insert_at_json must be an object.")
-    }
-}
-
-impl InputsData {
-    fn insert_at<T: AsRef<str> + std::fmt::Debug>(&mut self, path: &[T], value: JsonValue) {
-        insert_at_json(&mut self.0, path, value)
-    }
-
-    fn get_at<'a, T: AsRef<str>>(&'a self, path: &[T]) -> Option<&'a JsonValue> {
-        get_at_json(&self.0, path)
-    }
 }
 
 #[derive(Debug)]
@@ -119,7 +50,8 @@ pub enum Msg {
     FetchedJsonData(String),
     LoadFromLocalStorage,
     SaveToLocalStorage,
-    EditedInput(Path, String),
+    EditedInput(Path, JsonValue),
+    ListInputSizeChanged(Path, usize),
 }
 
 impl Component for Model {
@@ -147,34 +79,20 @@ impl Component for Model {
                 self.link.send_message(Msg::FetchedJsonData(json_str));
                 false
             }
-            Msg::FetchedJsonData(json_str) => {
-                let mut json_data: JsonValue =
-                    serde_json::from_str(&json_str).expect("Invalid JSON.");
-                let template = json_data["template"]
-                    .as_str()
-                    .expect("JSON input must have a template.")
-                    .to_string();
-
-                if let Err(e) = self.template_engine.set_template(&template) {
-                    self.state = State::LoadFailed(format!("Received invalid template: {:#?}", e));
-                } else {
-                    self.state = State::Loaded {
-                        template,
-                        inputs: serde_json::from_value(json_data["inputs"].take())
-                            .expect("Failed to deserialize inputs"),
-                        inputs_data: InputsData::default(),
-                    };
-                    self.link.send_message(Msg::SaveToLocalStorage);
+            Msg::FetchedJsonData(json_str) => match self.load_from_json(&json_str) {
+                Ok(should_render) => should_render,
+                Err(e) => {
+                    self.state = State::LoadFailed(format!("Received invalid data: {:#?}", e));
+                    true
                 }
-                true
-            }
+            },
             Msg::LoadFromLocalStorage => {
                 if let YewJson(Ok(restored_state)) =
                     self.storage.restore(LOCAL_STORAGE_KEY.as_ref())
                 {
                     self.state = restored_state;
-                    if let State::Loaded { template, .. } = &self.state {
-                        if let Err(e) = self.template_engine.set_template(template) {
+                    if let State::Loaded { scenario, .. } = &self.state {
+                        if let Err(e) = self.template_engine.set_template(&scenario.template) {
                             self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
                             self.state = State::LoadFailed(format!(
                                 "Invalid template fetched from local storage: {:#?}",
@@ -195,15 +113,40 @@ impl Component for Model {
                     .store(LOCAL_STORAGE_KEY.as_ref(), YewJson(&self.state));
                 false
             }
-            Msg::EditedInput(key, value) => match &mut self.state {
+            Msg::EditedInput(path, value) => match &mut self.state {
                 State::Loaded { inputs_data, .. } => {
-                    inputs_data.insert_at(key.as_slice(), JsonValue::String(value));
+                    match inputs_data.insert_at(&path, value) {
+                        Ok(()) => self.link.send_message(Msg::SaveToLocalStorage),
+                        Err(e) => {
+                            // TODO: Show the error
+                            self.console
+                                .error(&format!("Failed to save value of '{}': {:?}", path, e));
+                        }
+                    }
+                    true
+                }
+                _ => {
+                    self.console.warn(&format!(
+                        "Shouldn't have received a Msg::EditedInput message in state: {:?}.",
+                        self.state
+                    ));
+                    false
+                }
+            },
+            Msg::ListInputSizeChanged(path, new_size) => match &mut self.state {
+                State::Loaded { inputs_data, .. } => {
+                    if let Err(e) = inputs_data.resize_array_at(&path, new_size) {
+                        self.console
+                            .warn(&format!("Failed to access array at '{}': {:?}", path, e));
+                    }
+
                     self.link.send_message(Msg::SaveToLocalStorage);
                     true
                 }
                 _ => {
                     self.console.warn(&format!(
-                        "Shouldn't have received a Msg::EditedInput message in {:?} state.",
+                        "Shouldn't have received a Msg::ListInputSizeChanged message in state: \
+                         {:?}.",
                         self.state
                     ));
                     false
@@ -225,106 +168,64 @@ impl Component for Model {
                 }
             }
             State::Loaded {
-                inputs,
+                scenario,
                 inputs_data,
                 ..
             } => {
+                let on_reload = self.link.callback(|_| Msg::Init);
                 html! {
-                    <div class="columns">
-                        <div class="column">
-                            { render_inputs(inputs, inputs_data, &self.link) }
+                    <>
+                        <button class="button" onclick=on_reload>{ "Reload" }</button>
+                        <div class="columns">
+                            <div class="column">
+                                { render_inputs(&scenario.inputs, inputs_data, &self.link) }
+                            </div>
+                            <div class="column">
+                                { render_code_column(inputs_data, &self.template_engine) }
+                            </div>
                         </div>
-                        <div class="column">
-                            { render_code_column(inputs_data, &self.template_engine) }
-                        </div>
-                    </div>
+                    </>
                 }
             }
         }
     }
 }
 
-pub trait TemplateEngine {
-    fn render<T: Serialize>(&self, data: &T) -> Result<String>;
-}
+impl Model {
+    fn load_from_json(&mut self, json_str: &str) -> Result<ShouldRender> {
+        let mut json_data: JsonValue = serde_json::from_str(&json_str).context("Invalid JSON.")?;
+        let template = json_data["template"]
+            .as_str()
+            .context("JSON input must have a template.")?
+            .to_string();
 
-pub struct HandlebarsEngine {
-    inner: Handlebars<'static>,
-}
+        let inputs = serde_json::from_value(json_data["inputs"].take())
+            .context("Failed to deserialize inputs")?;
 
-impl HandlebarsEngine {
-    pub fn new_uninit() -> Self {
-        Self {
-            inner: Handlebars::default(),
+        if let Err(e) = self.template_engine.set_template(&template) {
+            self.state = State::LoadFailed(format!("Received invalid template: {:#?}", e));
+        } else {
+            self.state = State::Loaded {
+                scenario: Scenario { template, inputs },
+                inputs_data: InputsData::default(),
+            };
+            self.link.send_message(Msg::SaveToLocalStorage);
         }
-    }
-
-    #[allow(unused)]
-    pub fn with_template<S: AsRef<str>>(template: S) -> Self {
-        let mut s = Self::new_uninit();
-        s.set_template(template);
-        s
-    }
-
-    pub fn set_template<S: AsRef<str>>(&mut self, template: S) -> Result<()> {
-        self.inner
-            .register_template_string("t", template)
-            .context("Handlebars engine failed to compile the template")
-    }
-
-    #[allow(unused)]
-    fn is_initialized(&self) -> bool {
-        self.inner.has_template("t")
+        Ok(true)
     }
 }
 
-impl TemplateEngine for HandlebarsEngine {
-    fn render<T: Serialize>(&self, data: &T) -> Result<String> {
-        self.inner
-            .render("t", &data)
-            .context("Handlebars template engine failed to render data")
-    }
-}
+fn render_inputs(
+    inputs: &[InputTypes],
+    inputs_data: &InputsData,
+    link: &ComponentLink<Model>,
+) -> Html {
+    use crate::views::RenderableInput;
 
-fn render_input(input: &Input, inputs_data: &InputsData, link: &ComponentLink<Model>) -> Html {
-    let key_for_callback = input.key.clone();
-    let on_input = link.callback(move |input_data: InputData| {
-        Msg::EditedInput(key_for_callback.clone(), input_data.value)
-    });
-
-    let field_help = input
-        .description
-        .as_ref()
-        .map(|txt| html! { <p class="help">{txt}</p> })
-        .unwrap_or_default();
-
-    let value = inputs_data
-        .get_at(&input.key)
-        .map(|val: &_| match val {
-            JsonValue::Null => "".to_owned(),
-            JsonValue::Bool(true) => "true".to_owned(),
-            JsonValue::Bool(false) => "false".to_owned(),
-            JsonValue::Number(n) => format!("{}", n),
-            JsonValue::String(s) => s.clone(),
-            _ => format!("{}", val),
-        })
-        .unwrap_or_default();
-
-    html! {
-        <div class="field">
-            <label class="label">{&input.name}</label>
-            <div class="control">
-                <input class="input" type="text" placeholder={&input.name} oninput=&on_input value={value} />
-            </div>
-            { field_help }
-        </div>
-    }
-}
-
-fn render_inputs(inputs: &[Input], inputs_data: &InputsData, link: &ComponentLink<Model>) -> Html {
     html! {
         <>
-            { for inputs.iter().map(|input| render_input(input, inputs_data, link)) }
+            { for inputs.iter().map(|input| input.render(&Path::default(), inputs_data, link)) }
+            <pre>{ format!("{:#?}", inputs) }</pre>
         </>
     }
 }
@@ -336,6 +237,7 @@ fn render_code_column<T: TemplateEngine>(inputs_data: &InputsData, template_engi
 
     html! {
         <>
+            <pre>{ format!("{:#}", inputs_data) }</pre>
             <pre>{rendered}</pre>
         </>
     }
