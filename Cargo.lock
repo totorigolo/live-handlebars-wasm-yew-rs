@@ -464,9 +464,21 @@ dependencies = [
  "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
+ "web_logger 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "yew 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "web_logger"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stdweb 0.4.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasm-bindgen 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -566,5 +578,6 @@ dependencies = [
 "checksum wasm-bindgen-macro 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)" = "574094772ce6921576fb6f2e3f7497b8a76273b6db092be18fc48a082de09dc3"
 "checksum wasm-bindgen-macro-support 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)" = "e85031354f25eaebe78bb7db1c3d86140312a911a106b2e29f9cc440ce3e7668"
 "checksum wasm-bindgen-shared 0.2.58 (registry+https://github.com/rust-lang/crates.io-index)" = "f5e7e61fc929f4c0dddb748b102ebf9f632e2b8d739f2016542b4de2965a9601"
+"checksum web_logger 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f50afec20c2e728ca33ffb77d1ed049c8559f1d2e59e0fea36f6586d5bc74683"
 "checksum yew 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2239082684387504f93f2569ea3b22489f83c67bc8b2d0615cc852e00426fa67"
 "checksum yew-macro 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "44057d3fb6c5720633c51f5b442285119fcc9166d759f63b7518fc6e98ca9fd2"

@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+log = "0.4"
+web_logger = "0.2"
 yew = "0.12"
 handlebars = "3"
 serde = { version = "1", features = ["derive", "rc"] }

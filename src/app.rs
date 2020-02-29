@@ -8,10 +8,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use yew::{
     format::Json as YewJson,
-    services::{
-        storage::{Area, StorageService},
-        ConsoleService,
-    },
+    services::storage::{Area, StorageService},
     Component, ComponentLink, Html, ShouldRender,
 };
 
@@ -27,7 +24,6 @@ const INPUT_TEMPLATE: &str = include_str!("input_template.hbs");
 
 pub struct Model {
     link: ComponentLink<Self>,
-    console: ConsoleService,
     template_engine: HandlebarsEngine,
     storage: StorageService,
     state: State,
@@ -63,7 +59,6 @@ impl Component for Model {
 
         Model {
             link,
-            console: ConsoleService::new(),
             template_engine: HandlebarsEngine::new_uninit(),
             state: State::Init,
             storage: StorageService::new(Area::Local),
@@ -71,7 +66,7 @@ impl Component for Model {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        self.console.log(&format!("Received: {:?}", msg));
+        trace!("Received: {:?}", msg);
         match msg {
             Msg::Init => {
                 let json_str =
@@ -119,36 +114,34 @@ impl Component for Model {
                         Ok(()) => self.link.send_message(Msg::SaveToLocalStorage),
                         Err(e) => {
                             // TODO: Show the error
-                            self.console
-                                .error(&format!("Failed to save value of '{}': {:?}", path, e));
+                            error!("Failed to save value of '{}': {:?}", path, e);
                         }
                     }
                     true
                 }
                 _ => {
-                    self.console.warn(&format!(
+                    warn!(
                         "Shouldn't have received a Msg::EditedInput message in state: {:?}.",
                         self.state
-                    ));
+                    );
                     false
                 }
             },
             Msg::ListInputSizeChanged(path, new_size) => match &mut self.state {
                 State::Loaded { inputs_data, .. } => {
                     if let Err(e) = inputs_data.resize_array_at(&path, new_size) {
-                        self.console
-                            .warn(&format!("Failed to access array at '{}': {:?}", path, e));
+                        warn!("Failed to access array at '{}': {:?}", path, e);
                     }
 
                     self.link.send_message(Msg::SaveToLocalStorage);
                     true
                 }
                 _ => {
-                    self.console.warn(&format!(
+                    warn!(
                         "Shouldn't have received a Msg::ListInputSizeChanged message in state: \
                          {:?}.",
                         self.state
-                    ));
+                    );
                     false
                 }
             },
