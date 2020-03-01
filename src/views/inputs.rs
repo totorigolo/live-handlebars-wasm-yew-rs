@@ -1,6 +1,6 @@
 use crate::{app, for_all_inputtypes_variants, inputs::*, prelude::*, InputsData, Path};
 
-type AppComponentLink = yew::ComponentLink<app::Model>;
+type AppComponentLink = yew::ComponentLink<app::App>;
 
 pub trait RenderableInput {
     fn render(&self, key_base: &Path, inputs_data: &InputsData, link: &AppComponentLink) -> Html;

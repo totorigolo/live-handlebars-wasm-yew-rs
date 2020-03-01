@@ -2,7 +2,9 @@
 
 use crate::prelude::*;
 
+mod agents;
 pub mod app;
+mod components;
 mod inputs;
 mod prelude;
 mod scenario;

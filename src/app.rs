@@ -1,4 +1,6 @@
 use crate::{
+    agents::{Notification, NotificationBus, NotificationLevel, NotificationRequest},
+    components::Notifications,
     prelude::*,
     scenario::Scenario,
     template_engine::{HandlebarsEngine, TemplateEngine},
@@ -7,6 +9,7 @@ use crate::{
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use yew::{
+    agent::{Dispatched, Dispatcher},
     format::Json as YewJson,
     services::storage::{Area, StorageService},
     Component, ComponentLink, Html, ShouldRender,
@@ -22,10 +25,11 @@ lazy_static! {
 const JSON_INPUT: &str = include_str!("input_data.json");
 const INPUT_TEMPLATE: &str = include_str!("input_template.hbs");
 
-pub struct Model {
+pub struct App {
     link: ComponentLink<Self>,
     template_engine: HandlebarsEngine,
     storage: StorageService,
+    notification_bus: Dispatcher<NotificationBus>,
     state: State,
 }
 
@@ -51,18 +55,19 @@ pub enum Msg {
     RemoveAt(Path),
 }
 
-impl Component for Model {
+impl Component for App {
     type Message = Msg;
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         link.send_message(Msg::LoadFromLocalStorage);
 
-        Model {
+        Self {
             link,
             template_engine: HandlebarsEngine::new_uninit(),
-            state: State::Init,
             storage: StorageService::new(Area::Local).expect("Failed to get localStorage."),
+            notification_bus: NotificationBus::dispatcher(),
+            state: State::Init,
         }
     }
 
@@ -87,15 +92,36 @@ impl Component for Model {
                     self.storage.restore(LOCAL_STORAGE_KEY.as_ref())
                 {
                     self.state = restored_state;
+
+                    // Initialize the template engine with the deserialized template.
+                    // This can fail if the restored state is somewhat invalid.
                     if let State::Loaded { scenario, .. } = &self.state {
                         if let Err(e) = self.template_engine.set_template(&scenario.template) {
                             self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
-                            self.state = State::LoadFailed(format!(
-                                "Invalid template fetched from local storage: {:#?}",
-                                e
-                            ));
+                            self.state = State::Init;
+                            self.link.send_message(Msg::Init);
+
+                            self.notification_bus
+                                .send(NotificationRequest::New(Notification {
+                                    text: format!(
+                                        "Invalid template fetched from local storage: {}",
+                                        e
+                                    ),
+                                    level: NotificationLevel::Error,
+                                }));
                         }
                     }
+
+                    if let State::Init = self.state {
+                        // No notification
+                    } else {
+                        self.notification_bus
+                            .send(NotificationRequest::New(Notification {
+                                text: String::from("Restored previous session."),
+                                level: NotificationLevel::Success,
+                            }));
+                    }
+
                     true
                 } else {
                     // If we're here, local storage is either absent or invalid
@@ -167,7 +193,7 @@ impl Component for Model {
     }
 
     fn view(&self) -> Html {
-        match &self.state {
+        let state_html = match &self.state {
             State::Init => {
                 html! {
                     <p>{ "Loading..." }</p>
@@ -210,11 +236,18 @@ impl Component for Model {
                     </>
                 }
             }
+        };
+
+        html! {
+            <>
+                <Notifications />
+                { state_html }
+            </>
         }
     }
 }
 
-impl Model {
+impl App {
     fn load_from_json(&mut self, json_str: &str) -> Result<ShouldRender> {
         let mut json_data: JsonValue = serde_json::from_str(&json_str).context("Invalid JSON.")?;
         let template = json_data["template"]
@@ -241,7 +274,7 @@ impl Model {
 fn render_inputs(
     inputs: &[InputTypes],
     inputs_data: &InputsData,
-    link: &ComponentLink<Model>,
+    link: &ComponentLink<App>,
 ) -> Html {
     use crate::views::RenderableInput;
 

@@ -14,3 +14,10 @@ body {
 .input-group .input-group-children .delete {
     float: right;
 }
+
+.notifications {
+    position: absolute;
+    right: 0;
+    margin: 2rem;
+    z-index: 100000;
+}
