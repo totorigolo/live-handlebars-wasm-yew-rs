@@ -62,7 +62,7 @@ impl Component for Model {
             link,
             template_engine: HandlebarsEngine::new_uninit(),
             state: State::Init,
-            storage: StorageService::new(Area::Local),
+            storage: StorageService::new(Area::Local).expect("Failed to get localStorage."),
         }
     }
 
