@@ -1,4 +1,4 @@
-pub use anyhow::{bail, Context, Result};
+pub use anyhow::{anyhow, bail, Context, Result};
 pub use core::fmt;
 pub use log::*;
 pub use serde::{Deserialize, Serialize};

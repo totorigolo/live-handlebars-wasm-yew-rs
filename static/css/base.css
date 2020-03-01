@@ -1,0 +1,16 @@
+body {
+    background-color: #1a3e95;
+}
+
+.input-group p.help {
+    margin-bottom: 1rem;
+}
+
+.input-group .input-group-children {
+    border-left: 2px solid black;
+    padding-left: 1em;
+}
+
+.input-group .input-group-children .delete {
+    float: right;
+}

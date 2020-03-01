@@ -48,6 +48,7 @@ pub enum Msg {
     SaveToLocalStorage,
     EditedInput(Path, JsonValue),
     ListInputSizeChanged(Path, usize),
+    RemoveAt(Path),
 }
 
 impl Component for Model {
@@ -145,6 +146,23 @@ impl Component for Model {
                     false
                 }
             },
+            Msg::RemoveAt(path) => match &mut self.state {
+                State::Loaded { inputs_data, .. } => {
+                    if let Err(e) = inputs_data.remove_at(&path) {
+                        warn!("Failed to remove at '{}': {:?}", path, e);
+                    }
+
+                    self.link.send_message(Msg::SaveToLocalStorage);
+                    true
+                }
+                _ => {
+                    warn!(
+                        "Shouldn't have received a Msg::RemoveAt message in state: {:?}.",
+                        self.state
+                    );
+                    false
+                }
+            },
         }
     }
 
@@ -168,15 +186,27 @@ impl Component for Model {
                 let on_reload = self.link.callback(|_| Msg::Init);
                 html! {
                     <>
-                        <button class="button" onclick=on_reload>{ "Reload" }</button>
-                        <div class="columns">
-                            <div class="column">
-                                { render_inputs(&scenario.inputs, inputs_data, &self.link) }
-                            </div>
-                            <div class="column">
-                                { render_code_column(inputs_data, &self.template_engine) }
+                        <div class="section">
+                            <div class="container">
+                                <div class="box">
+                                    <button class="button" onclick=on_reload>{ "Reload" }</button>
+                                </div>
+
+                                <div class="columns is-desktop">
+                                    <div class="column">
+                                        { render_inputs(&scenario.inputs, inputs_data, &self.link) }
+                                    </div>
+                                    <div class="column">
+                                        { render_code_column(inputs_data, &self.template_engine) }
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        <footer class="footer">
+                            <div class="content has-text-centered">
+                                <p>{ "Wonderful footer" }</p>
+                            </div>
+                        </footer>
                     </>
                 }
             }
@@ -216,10 +246,10 @@ fn render_inputs(
     use crate::views::RenderableInput;
 
     html! {
-        <>
+        <div class="box">
+            <h1 class="title">{ "Inputs" }</h1>
             { for inputs.iter().map(|input| input.render(&Path::default(), inputs_data, link)) }
-            <pre>{ format!("{:#?}", inputs) }</pre>
-        </>
+        </div>
     }
 }
 
@@ -230,8 +260,14 @@ fn render_code_column<T: TemplateEngine>(inputs_data: &InputsData, template_engi
 
     html! {
         <>
-            <pre>{ format!("{:#}", inputs_data) }</pre>
-            <pre>{rendered}</pre>
+            <div class="box">
+                <h1 class="title">{ "Rendered template" }</h1>
+                <pre>{rendered}</pre>
+            </div>
+            <div class="box">
+                <h1 class="title">{ "Data" }</h1>
+                <pre>{ format!("{:#}", inputs_data) }</pre>
+            </div>
         </>
     }
 }

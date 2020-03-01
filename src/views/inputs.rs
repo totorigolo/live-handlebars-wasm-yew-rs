@@ -1,6 +1,6 @@
-use crate::{for_all_inputtypes_variants, inputs::*, prelude::*, InputsData, Path};
+use crate::{app, for_all_inputtypes_variants, inputs::*, prelude::*, InputsData, Path};
 
-type AppComponentLink = yew::ComponentLink<crate::app::Model>;
+type AppComponentLink = yew::ComponentLink<app::Model>;
 
 pub trait RenderableInput {
     fn render(&self, key_base: &Path, inputs_data: &InputsData, link: &AppComponentLink) -> Html;
@@ -15,11 +15,13 @@ impl RenderableInput for InputTypes {
 impl RenderableInput for TextInput {
     fn render(&self, key_base: &Path, inputs_data: &InputsData, link: &AppComponentLink) -> Html {
         let key = key_base + self.key();
+
+        let key_inner = key.clone();
         let on_input = link.callback(move |input_data: InputData| {
-            crate::app::Msg::EditedInput(key.clone(), JsonValue::String(input_data.value))
+            app::Msg::EditedInput(key_inner.clone(), JsonValue::String(input_data.value))
         });
 
-        let value = if let Some(value) = inputs_data.get_at(&self.key()) {
+        let value = if let Some(value) = inputs_data.get_at(&key) {
             match value {
                 JsonValue::Null => "".to_owned(),
                 JsonValue::Bool(true) => "true".to_owned(),
@@ -40,7 +42,7 @@ impl RenderableInput for TextInput {
                         class="input"
                         type="text"
                         placeholder={ self.name() }
-                        value={ value }
+                        value=value
                         oninput=&on_input
                         />
                 </div>
@@ -54,15 +56,17 @@ impl RenderableInput for GroupInput {
     fn render(&self, key_base: &Path, inputs_data: &InputsData, link: &AppComponentLink) -> Html {
         let key = key_base + self.key();
         html! {
-            <>
-                <p>{ self.name() }</p>
+            <div class="field input-group">
+                <p class="label">{ self.name() }</p>
                 { render_description(self.description()) }
-                { for self
-                    .inputs
-                    .iter()
-                    .map(|input| input.render(&key, &inputs_data, &link))
-                }
-            </>
+                <div class="input-group-children">
+                    { for self
+                        .inputs
+                        .iter()
+                        .map(|input| input.render(&key, &inputs_data, &link))
+                    }
+                </div>
+            </div>
         }
     }
 }
@@ -79,7 +83,7 @@ impl RenderableInput for NumberInput {
                     Err(_) => JsonValue::String(input_data.value),
                 },
             };
-            crate::app::Msg::EditedInput(key_callback.clone(), number)
+            app::Msg::EditedInput(key_callback.clone(), number)
         });
 
         let value = match inputs_data.get_at(&key) {
@@ -138,38 +142,52 @@ impl RenderableInput for ListInput {
 
         let on_resize = |key: Path, new_size| {
             link.callback(move |_: ClickEvent| {
-                crate::app::Msg::ListInputSizeChanged(key.clone(), new_size)
+                app::Msg::ListInputSizeChanged(key.clone(), new_size)
             })
         };
         let on_grow = on_resize(key.clone(), len + 1);
         let on_shrink = on_resize(key.clone(), len.saturating_sub(1));
 
-        fn render_list_elem(
-            inputs: &[InputTypes],
-            key: Path,
-            inputs_data: &InputsData,
-            link: &AppComponentLink,
-        ) -> Html {
+        let render_list_elem = |key_base: Path| {
+            let key_base_inner = key_base.clone();
+            let on_delete =
+                link.callback(move |_: ClickEvent| app::Msg::RemoveAt(key_base_inner.clone()));
+
             html! {
-                <div>
-                    { for inputs
+                <div class="input-group-children">
+                    <a class="delete" onclick=on_delete></a>
+                    <p>{ format!("key is: {}", key_base) }</p>
+                    { for self
+                        .inputs
                         .iter()
-                        .map(|input| input.render(&key, &inputs_data, &link))
+                        .map(|input| input.render(&key_base, &inputs_data, &link))
                     }
                 </div>
             }
-        }
+        };
 
         html! {
-            <>
-                <p>{ self.name() }</p>
-                <button class="button" onclick=on_grow>{ "Add elem" }</button>
-                <button class="button" onclick=on_shrink>{ "Remove elem" }</button>
+            <div class="field input-group">
+                <p class="label">{ self.name() }</p>
                 { render_description(self.description()) }
+
                 { for (0..len)
                     .map(|i| &key + &Path(i.to_string()))
-                    .map(|path| render_list_elem(&self.inputs, path, &inputs_data, &link)) }
-            </>
+                    .map(render_list_elem) }
+
+                <div class="buttons has-addons">
+                    <button class="button is-small" onclick=on_grow>
+                        <span class="icon is-small">
+                            <i class="fas fa-plus"></i>
+                        </span>
+                    </button>
+                    <button class="button is-small" onclick=on_shrink disabled=(len == 0)>
+                        <span class="icon is-small">
+                            <i class="fas fa-minus"></i>
+                        </span>
+                    </button>
+                </div>
+            </div>
         }
     }
 }
@@ -177,11 +195,15 @@ impl RenderableInput for ListInput {
 impl RenderableInput for BooleanInput {
     fn render(&self, key_base: &Path, inputs_data: &InputsData, link: &AppComponentLink) -> Html {
         let key = key_base + self.key();
-        let on_input = link.callback(move |input_data: InputData| {
-            crate::app::Msg::EditedInput(key.clone(), JsonValue::Bool(input_data.value == "true"))
-        });
 
-        let checked = match inputs_data.get_at(&self.key()) {
+        let key_inner = key.clone();
+        let on_click = |b| {
+            link.callback(move |_: ClickEvent| {
+                app::Msg::EditedInput(key_inner.clone(), JsonValue::Bool(b))
+            })
+        };
+
+        let checked = match inputs_data.get_at(&key) {
             Some(JsonValue::Null) => false,
             Some(JsonValue::Bool(b)) => *b,
             Some(JsonValue::Number(n)) => n.as_f64() != Some(0.0) && n.as_f64().is_some(),
@@ -189,19 +211,13 @@ impl RenderableInput for BooleanInput {
             Some(_) => true,
             None => false,
         };
+        //let color_class = if checked { "is-success" } else { "is-danger" };
+        let id = format!("input_boolean_{}", key);
 
         html! {
             <div class="field">
-                <label class="checkbox">
-                    <input
-                        type="checkbox"
-                        value=if checked { "false" } else { "true" }
-                        oninput=&on_input
-                        checked=checked
-                        />
-                    { self.name() }
-                </label>
-                <label class="label">{ self.name() }</label>
+                <input id=id name=id type="checkbox" class="switch" checked=checked onclick=on_click(!checked) />
+                <label for=id class="label">{ self.name() }</label>
                 { render_description(self.description()) }
             </div>
         }
@@ -211,7 +227,7 @@ impl RenderableInput for BooleanInput {
 fn render_description<T: AsRef<str>>(description: Option<T>) -> Html {
     if let Some(text) = description {
         html! {
-            <p class="description">{ text.as_ref() }</p>
+            <p class="help">{ text.as_ref() }</p>
         }
     } else {
         html! {}
