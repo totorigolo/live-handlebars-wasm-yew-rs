@@ -156,7 +156,6 @@ impl RenderableInput for ListInput {
             html! {
                 <div class="input-group-children">
                     <a class="delete" onclick=on_delete></a>
-                    <p>{ format!("key is: {}", key_base) }</p>
                     { for self
                         .inputs
                         .iter()
