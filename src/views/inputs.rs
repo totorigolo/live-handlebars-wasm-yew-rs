@@ -171,7 +171,7 @@ impl RenderableInput for ListInput {
                 { render_description(self.description()) }
 
                 { for (0..len)
-                    .map(|i| &key + &Path(i.to_string()))
+                    .map(|i| &key + Path::from(i))
                     .map(render_list_elem) }
 
                 <div class="buttons has-addons">
