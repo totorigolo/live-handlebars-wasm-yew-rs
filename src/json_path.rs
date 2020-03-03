@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
+#[serde(transparent)]
 pub struct Path {
     path: String,
 }

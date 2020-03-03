@@ -4,8 +4,15 @@ use crate::{inputs::InputTypes, prelude::*};
 /// of inputs needed to generate it.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Scenario {
-    pub template: String,
+    pub template: Template,
     pub inputs: Vec<InputTypes>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Template {
+    StringTemplate(String),
+    StringListTemplate(Vec<String>),
 }
 
 impl Scenario {}

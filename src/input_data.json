@@ -89,5 +89,27 @@
             "type": "text"
         }
     ],
-    "template": "%TEMPLATE%"
+    "template": [
+        "Variables in the current context: {{date}}-{{time}}",
+        "Dot-separated variables: {{author.first_name}} {{author.last_name}}",
+        "Disable escaping: {{{author.first_name}}}",
+        "",
+        "Array access: {{persons.[0].first_name}}",
+        "",
+        "Wonderful author: {{#with author}}{{first_name}} {{last_name}}, {{age}}{{/with}}",
+        "",
+        "Iterate nodes:{{#each persons}}",
+        "  - first_name={{first_name}} last_name={{last_name}}",
+        "{{~/each}}",
+        "",
+        "{{#if is_active}}",
+        "Variable 'is_active' is set.",
+        "{{else}}",
+        "Variable 'is_active' is unset.",
+        "{{/if}}",
+        "",
+        "{{~#unless license}}",
+        "No license set.",
+        "{{~/unless~}}"
+    ]
 }

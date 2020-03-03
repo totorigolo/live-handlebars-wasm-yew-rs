@@ -36,7 +36,6 @@ pub struct App {
 #[derive(Serialize, Deserialize, Debug)]
 enum State {
     Init,
-    LoadFailed(String),
     Loaded {
         scenario: Scenario,
         #[serde(default)]
@@ -48,6 +47,7 @@ enum State {
 pub enum Msg {
     Init,
     FetchedJsonData(String),
+    LoadDebugScenario,
     LoadFromLocalStorage,
     SaveToLocalStorage,
     EditedInput(Path, JsonValue),
@@ -60,7 +60,7 @@ impl Component for App {
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        link.send_message(Msg::LoadFromLocalStorage);
+        link.send_message(Msg::Init);
 
         Self {
             link,
@@ -75,17 +75,23 @@ impl Component for App {
         trace!("Received: {:?}", msg);
         match msg {
             Msg::Init => {
-                let json_str =
-                    JSON_INPUT.replace("%TEMPLATE%", &INPUT_TEMPLATE.replace("\n", "\\n"));
-                self.link.send_message(Msg::FetchedJsonData(json_str));
-                false
+                self.state = State::Init;
+                true
             }
             Msg::FetchedJsonData(json_str) => match self.load_from_json(&json_str) {
                 Ok(should_render) => should_render,
                 Err(e) => {
-                    self.state = State::LoadFailed(format!("Received invalid data: {:#?}", e));
-                    true
+                    // TODO: Better log when the log will be an enum --v
+                    let error = e.context("Failed to load the received scenario.");
+                    self.notif_error(format!("{:?}", error));
+                    false
                 }
+            },
+            Msg::LoadDebugScenario => {
+                let json_str =
+                    JSON_INPUT.replace("%TEMPLATE%", &INPUT_TEMPLATE.replace("\n", "\\n"));
+                self.link.send_message(Msg::FetchedJsonData(json_str));
+                false
             },
             Msg::LoadFromLocalStorage => {
                 if let YewJson(Ok(restored_state)) =
@@ -101,25 +107,14 @@ impl Component for App {
                             self.state = State::Init;
                             self.link.send_message(Msg::Init);
 
-                            self.notification_bus
-                                .send(NotificationRequest::New(Notification {
-                                    text: format!(
-                                        "Invalid template fetched from local storage: {}",
-                                        e
-                                    ),
-                                    level: NotificationLevel::Error,
-                                }));
+                            self.notif_error(format!("Invalid template fetched from local storage: {}", e));
                         }
                     }
 
                     if let State::Init = self.state {
                         // No notification
                     } else {
-                        self.notification_bus
-                            .send(NotificationRequest::New(Notification {
-                                text: String::from("Restored previous session."),
-                                level: NotificationLevel::Success,
-                            }));
+                        self.notif_success("Restored previous session.");
                     }
 
                     true
@@ -193,15 +188,29 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
+        let on_load_debug_scenario = self.link.callback(|_| Msg::LoadDebugScenario);
+        let on_load_from_local_storate = self.link.callback(|_| Msg::LoadFromLocalStorage);
+        let on_reset_scenario = self.link.callback(|_| Msg::Init);
+        let controls = html! {
+            <div class="box">
+                <button class="button" onclick=on_load_from_local_storate>
+                    { "Reload from saved session" }
+                </button>
+                <button class="button" onclick=on_load_debug_scenario>
+                    { "Load a debug scenario" }
+                </button>
+                <button class="button" onclick=on_reset_scenario>
+                    { "Unload" }
+                </button>
+            </div>
+        };
+
         let state_html = match &self.state {
             State::Init => {
                 html! {
-                    <p>{ "Loading..." }</p>
-                }
-            }
-            State::LoadFailed(error_msg) => {
-                html! {
-                    <p>{ format!("Load failed: {}", error_msg) }</p>
+                    <div class="box">
+                        <p>{ "Nothing loaded. Use a button above." }</p>
+                    </div>
                 }
             }
             State::Loaded {
@@ -209,31 +218,15 @@ impl Component for App {
                 inputs_data,
                 ..
             } => {
-                let on_reload = self.link.callback(|_| Msg::Init);
                 html! {
-                    <>
-                        <div class="section">
-                            <div class="container">
-                                <div class="box">
-                                    <button class="button" onclick=on_reload>{ "Reload" }</button>
-                                </div>
-
-                                <div class="columns is-desktop">
-                                    <div class="column">
-                                        { render_inputs(&scenario.inputs, inputs_data, &self.link) }
-                                    </div>
-                                    <div class="column">
-                                        { render_code_column(inputs_data, &self.template_engine) }
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="columns is-desktop">
+                        <div class="column">
+                            { render_inputs(&scenario.inputs, inputs_data, &self.link) }
                         </div>
-                        <footer class="footer">
-                            <div class="content has-text-centered">
-                                <p>{ "Wonderful footer" }</p>
-                            </div>
-                        </footer>
-                    </>
+                        <div class="column">
+                            { render_code_column(inputs_data, &self.template_engine) }
+                        </div>
+                    </div>
                 }
             }
         };
@@ -241,7 +234,18 @@ impl Component for App {
         html! {
             <>
                 <Notifications />
-                { state_html }
+                <div class="section">
+                    <div class="container">
+                        { controls }
+
+                        { state_html }
+                    </div>
+                </div>
+                <footer class="footer">
+                    <div class="content has-text-centered">
+                        <p>{ "Wonderful footer" }</p>
+                    </div>
+                </footer>
             </>
         }
     }
@@ -250,24 +254,44 @@ impl Component for App {
 impl App {
     fn load_from_json(&mut self, json_str: &str) -> Result<ShouldRender> {
         let mut json_data: JsonValue = serde_json::from_str(&json_str).context("Invalid JSON.")?;
-        let template = json_data["template"]
-            .as_str()
-            .context("JSON input must have a template.")?
-            .to_string();
+        let template = serde_json::from_value(json_data["template"].take())
+            .context("JSON input must have a template.")?;
 
         let inputs = serde_json::from_value(json_data["inputs"].take())
             .context("Failed to deserialize inputs")?;
 
-        if let Err(e) = self.template_engine.set_template(&template) {
-            self.state = State::LoadFailed(format!("Received invalid template: {:#?}", e));
-        } else {
-            self.state = State::Loaded {
-                scenario: Scenario { template, inputs },
-                inputs_data: InputsData::default(),
-            };
-            self.link.send_message(Msg::SaveToLocalStorage);
-        }
+        self
+            .template_engine
+            .set_template(&template)
+            .map_err(|e| e.context("Failed to load the template"))?;
+
+        self.state = State::Loaded {
+            scenario: Scenario { template, inputs },
+            inputs_data: InputsData::default(),
+        };
+        self.link.send_message(Msg::SaveToLocalStorage);
+
         Ok(true)
+    }
+}
+
+impl App {
+    fn notif_success<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        debug!("Success: {:?}", &s);
+        self.notification_bus.send(NotificationRequest::New(Notification {
+            text: s,
+            level: NotificationLevel::Success,
+        }));
+    }
+
+    fn notif_error<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        error!("Error: {:?}", &s);
+        self.notification_bus.send(NotificationRequest::New(Notification {
+            text: s,
+            level: NotificationLevel::Error,
+        }));
     }
 }
 
@@ -289,7 +313,7 @@ fn render_inputs(
 fn render_code_column<T: TemplateEngine>(inputs_data: &InputsData, template_engine: &T) -> Html {
     let rendered = template_engine
         .render(inputs_data)
-        .unwrap_or_else(|e| format!("Failed to render the data: {:#?}", e));
+        .unwrap_or_else(|e| e.context("Failed to render the data").to_string());
 
     html! {
         <>
