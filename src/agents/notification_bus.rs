@@ -1,10 +1,54 @@
 use log::*;
 use serde::{Deserialize, Serialize};
-use yew::worker::*;
+use yew::{agent::Dispatcher, worker::*};
 
 pub struct NotificationBus {
     link: AgentLink<Self>,
     subscribers: Vec<HandlerId>,
+}
+
+pub trait NotificationSender {
+    fn notification_bus(&mut self) -> &mut Dispatcher<NotificationBus>;
+
+    fn notif_success<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        debug!("Success: {:?}", &s);
+        self.notification_bus()
+            .send(NotificationRequest::New(Notification {
+                text: s,
+                level: NotificationLevel::Success,
+            }));
+    }
+
+    fn notif_info<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        info!("Info: {:?}", &s);
+        self.notification_bus()
+            .send(NotificationRequest::New(Notification {
+                text: s,
+                level: NotificationLevel::Info,
+            }));
+    }
+
+    fn notif_warn<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        warn!("Warning: {:?}", &s);
+        self.notification_bus()
+            .send(NotificationRequest::New(Notification {
+                text: s,
+                level: NotificationLevel::Warning,
+            }));
+    }
+
+    fn notif_error<T: ToString>(&mut self, text: T) {
+        let s = text.to_string();
+        error!("Error: {:?}", &s);
+        self.notification_bus()
+            .send(NotificationRequest::New(Notification {
+                text: s,
+                level: NotificationLevel::Error,
+            }));
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

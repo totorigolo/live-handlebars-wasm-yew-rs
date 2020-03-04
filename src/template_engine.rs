@@ -1,7 +1,7 @@
+use crate::scenario::Template;
 use anyhow::{Context, Result};
 use handlebars::Handlebars;
 use serde::Serialize;
-use crate::scenario::Template;
 
 pub trait TemplateEngine {
     fn render<T: Serialize>(&self, data: &T) -> Result<String>;
@@ -28,10 +28,10 @@ impl HandlebarsEngine {
     #[allow(unused)]
     pub fn set_template(&mut self, template: &Template) -> Result<()> {
         match template {
-            Template::StringTemplate(s) =>
-            self.inner.register_template_string("t", s),
-            Template::StringListTemplate(ls) =>
-            self.inner.register_template_string("t", ls.join("\n")),
+            Template::StringTemplate(s) => self.inner.register_template_string("t", s),
+            Template::StringListTemplate(ls) => {
+                self.inner.register_template_string("t", ls.join("\n"))
+            }
         }
         .context("Handlebars engine failed to compile the template")
     }

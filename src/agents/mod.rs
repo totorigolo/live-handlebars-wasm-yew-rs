@@ -1,3 +1,3 @@
 mod notification_bus;
 
-pub use notification_bus::{Notification, NotificationBus, NotificationLevel, NotificationRequest};
+pub use notification_bus::*;

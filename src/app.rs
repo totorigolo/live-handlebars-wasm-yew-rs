@@ -1,6 +1,6 @@
 use crate::{
-    agents::{Notification, NotificationBus, NotificationLevel, NotificationRequest},
-    components::Notifications,
+    agents::{NotificationBus, NotificationSender},
+    components::{Navbar, Notifications},
     prelude::*,
     scenario::Scenario,
     template_engine::{HandlebarsEngine, TemplateEngine},
@@ -31,6 +31,7 @@ pub struct App {
     storage: StorageService,
     notification_bus: Dispatcher<NotificationBus>,
     state: State,
+    on_navevent: Callback<NavEvent>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,6 +47,7 @@ enum State {
 #[derive(Debug)]
 pub enum Msg {
     Init,
+    NavEvent(NavEvent),
     FetchedJsonData(String),
     LoadDebugScenario,
     LoadFromLocalStorage,
@@ -55,12 +57,26 @@ pub enum Msg {
     RemoveAt(Path),
 }
 
+#[derive(Debug)]
+pub enum NavEvent {
+    LoadDebugScenario,
+    LoadFromLocalStorage,
+    UnloadScenario,
+}
+
+impl NotificationSender for App {
+    fn notification_bus(&mut self) -> &mut Dispatcher<NotificationBus> {
+        &mut self.notification_bus
+    }
+}
+
 impl Component for App {
     type Message = Msg;
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         link.send_message(Msg::Init);
+        let on_navevent = link.callback(Msg::NavEvent);
 
         Self {
             link,
@@ -68,6 +84,7 @@ impl Component for App {
             storage: StorageService::new(Area::Local).expect("Failed to get localStorage."),
             notification_bus: NotificationBus::dispatcher(),
             state: State::Init,
+            on_navevent,
         }
     }
 
@@ -76,6 +93,13 @@ impl Component for App {
         match msg {
             Msg::Init => {
                 self.state = State::Init;
+                true
+            }
+            Msg::NavEvent(nav_event) => {
+                self.notif_error(format!("Unhandled event: {:?}", nav_event));
+
+                // TODO: Move code from messages here/in App's methods
+
                 true
             }
             Msg::FetchedJsonData(json_str) => match self.load_from_json(&json_str) {
@@ -92,7 +116,7 @@ impl Component for App {
                     JSON_INPUT.replace("%TEMPLATE%", &INPUT_TEMPLATE.replace("\n", "\\n"));
                 self.link.send_message(Msg::FetchedJsonData(json_str));
                 false
-            },
+            }
             Msg::LoadFromLocalStorage => {
                 if let YewJson(Ok(restored_state)) =
                     self.storage.restore(LOCAL_STORAGE_KEY.as_ref())
@@ -107,7 +131,10 @@ impl Component for App {
                             self.state = State::Init;
                             self.link.send_message(Msg::Init);
 
-                            self.notif_error(format!("Invalid template fetched from local storage: {}", e));
+                            self.notif_error(format!(
+                                "Invalid template fetched from local storage: {}",
+                                e
+                            ));
                         }
                     }
 
@@ -120,6 +147,7 @@ impl Component for App {
                     true
                 } else {
                     // If we're here, local storage is either absent or invalid
+                    self.notif_warn("Nothing to restore from local storage.");
                     self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
                     self.link.send_message(Msg::Init);
                     false
@@ -234,6 +262,11 @@ impl Component for App {
         html! {
             <>
                 <Notifications />
+
+                <div class="container box navbar-container">
+                    <Navbar on_navevent=&self.on_navevent />
+                </div>
+
                 <div class="section">
                     <div class="container">
                         { controls }
@@ -241,6 +274,7 @@ impl Component for App {
                         { state_html }
                     </div>
                 </div>
+
                 <footer class="footer">
                     <div class="content has-text-centered">
                         <p>{ "Wonderful footer" }</p>
@@ -260,8 +294,7 @@ impl App {
         let inputs = serde_json::from_value(json_data["inputs"].take())
             .context("Failed to deserialize inputs")?;
 
-        self
-            .template_engine
+        self.template_engine
             .set_template(&template)
             .map_err(|e| e.context("Failed to load the template"))?;
 
@@ -272,26 +305,6 @@ impl App {
         self.link.send_message(Msg::SaveToLocalStorage);
 
         Ok(true)
-    }
-}
-
-impl App {
-    fn notif_success<T: ToString>(&mut self, text: T) {
-        let s = text.to_string();
-        debug!("Success: {:?}", &s);
-        self.notification_bus.send(NotificationRequest::New(Notification {
-            text: s,
-            level: NotificationLevel::Success,
-        }));
-    }
-
-    fn notif_error<T: ToString>(&mut self, text: T) {
-        let s = text.to_string();
-        error!("Error: {:?}", &s);
-        self.notification_bus.send(NotificationRequest::New(Notification {
-            text: s,
-            level: NotificationLevel::Error,
-        }));
     }
 }
 
