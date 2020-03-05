@@ -49,8 +49,6 @@ pub enum Msg {
     Init,
     NavEvent(NavEvent),
     FetchedJsonData(String),
-    LoadDebugScenario,
-    LoadFromLocalStorage,
     SaveToLocalStorage,
     EditedInput(Path, JsonValue),
     ListInputSizeChanged(Path, usize),
@@ -96,11 +94,11 @@ impl Component for App {
                 true
             }
             Msg::NavEvent(nav_event) => {
-                self.notif_error(format!("Unhandled event: {:?}", nav_event));
-
-                // TODO: Move code from messages here/in App's methods
-
-                true
+                match nav_event {
+                    NavEvent::LoadDebugScenario => self.load_debug_scenario(),
+                    NavEvent::LoadFromLocalStorage => self.load_from_local_storage(),
+                    NavEvent::UnloadScenario => self.unload_scenario(),
+                }
             }
             Msg::FetchedJsonData(json_str) => match self.load_from_json(&json_str) {
                 Ok(should_render) => should_render,
@@ -111,48 +109,6 @@ impl Component for App {
                     false
                 }
             },
-            Msg::LoadDebugScenario => {
-                let json_str =
-                    JSON_INPUT.replace("%TEMPLATE%", &INPUT_TEMPLATE.replace("\n", "\\n"));
-                self.link.send_message(Msg::FetchedJsonData(json_str));
-                false
-            }
-            Msg::LoadFromLocalStorage => {
-                if let YewJson(Ok(restored_state)) =
-                    self.storage.restore(LOCAL_STORAGE_KEY.as_ref())
-                {
-                    self.state = restored_state;
-
-                    // Initialize the template engine with the deserialized template.
-                    // This can fail if the restored state is somewhat invalid.
-                    if let State::Loaded { scenario, .. } = &self.state {
-                        if let Err(e) = self.template_engine.set_template(&scenario.template) {
-                            self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
-                            self.state = State::Init;
-                            self.link.send_message(Msg::Init);
-
-                            self.notif_error(format!(
-                                "Invalid template fetched from local storage: {}",
-                                e
-                            ));
-                        }
-                    }
-
-                    if let State::Init = self.state {
-                        // No notification
-                    } else {
-                        self.notif_success("Restored previous session.");
-                    }
-
-                    true
-                } else {
-                    // If we're here, local storage is either absent or invalid
-                    self.notif_warn("Nothing to restore from local storage.");
-                    self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
-                    self.link.send_message(Msg::Init);
-                    false
-                }
-            }
             Msg::SaveToLocalStorage => {
                 self.storage
                     .store(LOCAL_STORAGE_KEY.as_ref(), YewJson(&self.state));
@@ -216,23 +172,6 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
-        let on_load_debug_scenario = self.link.callback(|_| Msg::LoadDebugScenario);
-        let on_load_from_local_storate = self.link.callback(|_| Msg::LoadFromLocalStorage);
-        let on_reset_scenario = self.link.callback(|_| Msg::Init);
-        let controls = html! {
-            <div class="box">
-                <button class="button" onclick=on_load_from_local_storate>
-                    { "Reload from saved session" }
-                </button>
-                <button class="button" onclick=on_load_debug_scenario>
-                    { "Load a debug scenario" }
-                </button>
-                <button class="button" onclick=on_reset_scenario>
-                    { "Unload" }
-                </button>
-            </div>
-        };
-
         let state_html = match &self.state {
             State::Init => {
                 html! {
@@ -269,8 +208,6 @@ impl Component for App {
 
                 <div class="section">
                     <div class="container">
-                        { controls }
-
                         { state_html }
                     </div>
                 </div>
@@ -305,6 +242,52 @@ impl App {
         self.link.send_message(Msg::SaveToLocalStorage);
 
         Ok(true)
+    }
+
+    fn load_debug_scenario(&mut self) -> ShouldRender {
+        let json_str = JSON_INPUT.replace("%TEMPLATE%", &INPUT_TEMPLATE.replace("\n", "\\n"));
+        self.link.send_message(Msg::FetchedJsonData(json_str));
+        false
+    }
+
+    fn load_from_local_storage(&mut self) -> ShouldRender {
+        if let YewJson(Ok(restored_state)) = self.storage.restore(LOCAL_STORAGE_KEY.as_ref()) {
+            self.state = restored_state;
+
+            // Initialize the template engine with the deserialized template.
+            // This can fail if the restored state is somewhat invalid.
+            if let State::Loaded { scenario, .. } = &self.state {
+                if let Err(e) = self.template_engine.set_template(&scenario.template) {
+                    self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
+                    self.state = State::Init;
+                    self.link.send_message(Msg::Init);
+
+                    self.notif_error(format!(
+                        "Invalid template fetched from local storage: {}",
+                        e
+                    ));
+                }
+            }
+
+            if let State::Init = self.state {
+                // No notification
+            } else {
+                self.notif_success("Restored previous session.");
+            }
+
+            true
+        } else {
+            // If we're here, local storage is either absent or invalid
+            self.notif_warn("Nothing to restore from local storage.");
+            self.storage.remove(LOCAL_STORAGE_KEY.as_ref());
+            self.link.send_message(Msg::Init);
+            false
+        }
+    }
+
+    fn unload_scenario(&mut self) -> ShouldRender {
+        self.link.send_message(Msg::Init);
+        false
     }
 }
 
