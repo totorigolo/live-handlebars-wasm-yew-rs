@@ -2,8 +2,14 @@ html {
     background-color: #1a3e95;
 }
 
-body {
-    min-height: 100%;
+.site {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+}
+
+.site-content {
+    flex: 1;
 }
 
 .notifications {
@@ -13,7 +19,7 @@ body {
     z-index: 100000;
 }
 
-.navbar-container {
+.navbar-container > .box {
     padding: .3rem 1.25rem .3rem 1.25rem !important;
     border-top-left-radius: 0 !important;
     border-top-right-radius: 0 !important;

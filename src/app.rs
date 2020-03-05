@@ -202,11 +202,15 @@ impl Component for App {
             <>
                 <Notifications />
 
-                <div class="container box navbar-container">
-                    <Navbar on_navevent=&self.on_navevent />
+                <div class="section">
+                    <div class="container navbar-container">
+                        <div class="box">
+                            <Navbar on_navevent=&self.on_navevent />
+                        </div>
+                    </div>
                 </div>
 
-                <div class="section">
+                <div class="section site-content">
                     <div class="container">
                         { state_html }
                     </div>
